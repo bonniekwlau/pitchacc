@@ -18,7 +18,6 @@ import mne
 from mnefun._paths import get_raw_fnames, get_event_fnames
 
 
-
 def score(p, subjects, run_indices):
     """Default scoring function that just passes event numbers through"""
     for si, subj in enumerate(subjects):
@@ -39,17 +38,9 @@ def score(p, subjects, run_indices):
             event_type = np.zeros((len(start_inds), 3))
             # take all samples marked with 1 trigger (stim onset)
             events = events_raw[start_inds, :]
+            assert len(events) == 200  # otherwise something is wrong
             # :100 - pitch 100: - speech 100 trials for full data set
             event_type[:100, -1] = 10  # 'pitch'
             event_type[100:, -1] = 20  # 'speech'
             events[:, -1] = event_type[:, -1]
             mne.write_events(eve_fname, events)
-
-
-
-
-     
-            
-            
-            
-            
