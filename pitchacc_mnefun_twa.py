@@ -21,37 +21,30 @@ import mnefun
 import numpy as np
 from score import score
 
-try:
-    # Use niprov as handler for events if it's installed
-    from niprov.mnefunsupport import handler
-except ImportError:
-    handler = None
-
 params = mnefun.Params(tmin=-0.2, tmax=2, n_jobs=8,
                        decim=2, proj_sfreq=200, n_jobs_fir='cuda',
-                       filter_length='5s', lp_cut=80., n_jobs_resample='cuda',
-                       bmin=-0.1)
-params.subjects = ['pitchacc_108_01']
-# added -force -autobad off to line 956 in mnefun.py
-# removed 'copy=False' from line 1391, in save_epochs
-# changed mnefun.py line 1048 to 'bad_condition='warning' to bypass bad
-# matrix error
-params.structurals = [None] * len(params.subjects)  # None means use sphere
+                       filter_length='auto', lp_cut=80.,
+                       n_jobs_resample='cuda', cov_method='shrunk',
+                       bmin=-0.1, bem_type='5120')
+params.subjects_dir = 'subjects'
+params.subjects = ['pitchacc_108']
+params.structurals = params.subjects
 params.dates = [None] * len(params.subjects)  # None used to fully anonymize
 params.score = score  # scoring function used to slice data into trials
 # define which subjects to run
 params.subject_indices = np.arange(len(params.subjects))
-params.plot_drop_logs = False  # Turn off so plots do not halt processing
+params.plot_drop_logs = True
 
 # Set parameters for remotely connecting to acquisition computer
 params.acq_ssh = 'bonnie@172.28.161.8'  # minea
 # params.acq_ssh = 'bonnie@sinuhe.ilabs.uw.edu'  # minea
-params.acq_dir = '/sinuhe/data03/pitchacc'
+params.acq_dir = '/sinuhe/data01/pitchacc'
 
 # Set parameters for remotely connecting to SSS workstation ('sws')
 # params.sws_ssh = 'bonnie@172.25.148.15' #use sinuhe for MF 2.1
-params.sws_ssh = 'bonnie@kasga.ilabs.uw.edu'  # use sinuhe for MF 2.1
-params.sws_dir = '/home/bonnie/'
+params.sws_ssh = 'localhost'  # 'bonnie@kasga.ilabs.uw.edu'  # use sinuhe for MF 2.1
+params.sws_port = 2222
+params.sws_dir = '/mnt/bakraid/data/sss_work'  # '/home/bonnie/'
 
 #  SSS Options
 # python | maxfilter for choosing SSS applied using either Maxfilter or MNE
@@ -62,35 +55,23 @@ params.int_order = 6
 params.st_correlation = .95
 params.trans_to = 'twa'  # (0,0,0.3)  # (0,0,0.04) or 'median'
 params.movecomp = 'inter'
-params.coil_bad_count_duration_limit = 0.1
+params.coil_dist_limit = 0.01  # be mroe tolerant
 # Trial/CH rejection criteria
-# params.reject = dict(grad=3000e-13, mag=4000e-15)
-params.reject = dict()
+params.reject = dict(grad=3000e-13, mag=4000e-15)
 params.flat = dict(grad=1e-13, mag=1e-15)
-# params.auto_bad_reject = dict(grad=3000e-13, mag=4000e-15)
-params.auto_bad_reject = None
 params.ssp_ecg_reject = dict(grad=3000e-13, mag=6000e-15)
-# params.ssp_ecg_reject  = None
-params.auto_bad_flat = None
-params.auto_bad_meg_thresh = 10
-params.run_names = ['%s']
+params.run_names = ['%s_01']
 params.get_projs_from = np.arange(1)
 params.inv_names = ['%s']
 params.inv_runs = [np.arange(1)]
-params.runs_empty = []
+params.runs_empty = ['%s_erm']
 # Define number of SSP projectors. Columns correspond to Grad/Mag/EEG chans
-params.proj_nums = [[0, 0, 0],  # ECG: grad/mag/eeg
+params.proj_nums = [[1, 1, 0],  # ECG: grad/mag/eeg
                     [0, 0, 0],  # EOG
                     [0, 0, 0]]  # Continuous (from ERM)
-
-params.cov_method = 'empirical'  # Cleaner noise covariance regularization
+params.proj_ave = True
 params.compute_rank = True
-# params.bem_type = '5120'
-# params.plot_head_position = True  # Plot cHPI data for single raw file
-# By default SSP projection scalp topography maps will be saved in
-# sss_pca_folder for inspection. To avoid having images saved to disk set
-# params.plot_pca = False
-# params.plot_drop_logs = True
+params.cov_rank = None
 
 # Epoching: scoring function needs to produce an event file with these values
 params.in_numbers = [10, 20]
@@ -108,34 +89,41 @@ params.must_match = [
     [0, 1],  # Only ensure the standard event counts match
 ]
 
-pitch_times = [0.1, 0.2]
-speech_times = [0.1, 0.2]
+times = [0.25, 0.5]
 params.report_params.update(
     bem=False,
-    whitening=False,
+    whitening=dict(analysis='All', name='All', cov='%s-80-sss-cov.fif'),
     ssp_topomaps=True,
     sensor=[
-        dict(analysis='Conditions', name='pitch', times=pitch_times),
-        dict(analysis='Conditions', name='speech', times=speech_times)],
-    source_alignment=False,
-    source=False,
+        dict(analysis='Conditions', name='pitch', times=times),
+        dict(analysis='Conditions', name='speech', times=times),
+        ],
+    source_alignment=True,
+    source=[
+        dict(analysis='Conditions', name='pitch', times=times,
+             inv='%s-80-sss-meg-free-inv.fif', views=['lat', 'med'],
+             size=(800, 800)),
+        dict(analysis='Conditions', name='speech', times=times,
+             inv='%s-80-sss-meg-free-inv.fif', views=['lat', 'med'],
+             size=(800, 800)),
+        ],
     psd=False,
     )
+default = False
 mnefun.do_processing(
     params,
-    fetch_raw=False,
-    push_raw=False,
-    do_sss=False,
-    fetch_sss=False,
-    do_score=False,
-    do_ch_fix=False,
-    gen_ssp=False,
-    apply_ssp=False,
-    write_epochs=False,
-    gen_covs=False,
-    gen_fwd=False,
-    gen_inv=False,
-    gen_report=True
-    ,
+    fetch_raw=default,
+    do_score=default,
+    push_raw=default,
+    do_sss=default,
+    fetch_sss=default,
+    do_ch_fix=default,
+    gen_ssp=default,
+    apply_ssp=default,
+    write_epochs=default,
+    gen_covs=default,
+    gen_fwd=default,
+    gen_inv=default,
+    gen_report=True,
     print_status=False,
 )
